@@ -1,0 +1,6 @@
+{
+  "name": "IceStream - Autonomous Lakehouse Observability",
+  "description": "Real-time streaming pipeline observability, Great Expectations data assertions, Apache Iceberg time-travel recovery, and autonomous incident healing for mission-critical lakehouses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
