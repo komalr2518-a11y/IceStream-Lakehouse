@@ -42,6 +42,57 @@ export const IncidentsScreen: React.FC<IncidentsScreenProps> = ({
       s.jurisdiction.toLowerCase().includes(filterSearch.toLowerCase())
   );
 
+  const handleDownloadIncidentJson = () => {
+    const data = {
+      incidentId: "INC-2025-0514-082",
+      severity: "P1 - CRITICAL",
+      status: "AUTONOMOUSLY_MITIGATED",
+      pipeline: "telemetry.orders.checkout.v2",
+      targetTable: "prod_lakehouse.checkout_transactions",
+      autonomousAgent: "IceStream-SelfHeal-v4",
+      circuitTripLatencyMs: 189,
+      dataLeakedRows: 0,
+      financialBlastRadiusGuardedUsd: 1420800,
+      quarantinedOrdersCount: 14160,
+      goldenSnapshotLocked: 4819284718,
+      chronologyEvents: CHRONOLOGY_EVENTS,
+      quarantinedSamples: samples,
+      generatedAt: new Date().toISOString()
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `incident_audit_INC-2025-0514-082.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadIncidentCsv = () => {
+    const headers = ["Event Offset", "UTC Timestamp", "Badge", "Action Taken", "Description"];
+    const eventRows = CHRONOLOGY_EVENTS.map(e => [
+      `"${e.timeOffset}"`,
+      `"${e.utcTime}"`,
+      `"${e.badge}"`,
+      e.isAction ? "YES" : "NO",
+      `"${e.description.replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = [headers.join(','), ...eventRows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `incident_chronology_INC-2025-0514-082.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-7 pb-12">
       {/* 1. Incident Master Forensics Header */}
@@ -302,7 +353,7 @@ DISPATCH async_remediation_worker(batch=9281, action="GEO_TAX_REBUILD")
               <button
                 type="button"
                 onClick={onOpenPostmortem}
-                className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold transition-colors border border-slate-200"
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold transition-colors border border-slate-200 cursor-pointer"
               >
                 <span className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[17px] text-emerald-600">picture_as_pdf</span>
@@ -310,6 +361,27 @@ DISPATCH async_remediation_worker(batch=9281, action="GEO_TAX_REBUILD")
                 </span>
                 <span className="text-slate-500 text-[11px] font-normal">Instant Export</span>
               </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadIncidentJson}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-sky-700 rounded-xl text-xs font-semibold border border-slate-200 shadow-sm transition-all cursor-pointer"
+                  title="Download full incident audit telemetry and chronology as JSON"
+                >
+                  <span className="material-symbols-outlined text-[15px]">data_object</span>
+                  Export Audit JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadIncidentCsv}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-emerald-700 rounded-xl text-xs font-semibold border border-slate-200 shadow-sm transition-all cursor-pointer"
+                  title="Download incident events chronology as CSV"
+                >
+                  <span className="material-symbols-outlined text-[15px]">table_chart</span>
+                  Export Audit CSV
+                </button>
+              </div>
 
               <button
                 type="button"

@@ -14,39 +14,74 @@ export const IcebergTableScreen: React.FC<IcebergTableScreenProps> = ({
   const [promoteStatus, setPromoteStatus] = useState<'idle' | 'promoting' | 'promoted'>('idle');
   const [branchStatus, setBranchStatus] = useState<'idle' | 'branching' | 'created'>('idle');
   const [syncRateOverridden, setSyncRateOverridden] = useState(false);
-  const [queryCode, setQueryCode] = useState<string>(
-    `SELECT * FROM prod_lakehouse.checkout_transactions\nFOR SYSTEM_VERSION AS OF 4819284718\nWHERE tax_amount IS NULL;`
-  );
-  const [isQueryRunning, setIsQueryRunning] = useState(false);
-  const [queryResultText, setQueryResultText] = useState('0 rows returned (Verified Golden State)');
+  const [selectedPreset, setSelectedPreset] = useState<'golden' | 'corrupt' | 'partitions' | 'history'>('golden');
+  const [queryExecutionStats, setQueryExecutionStats] = useState({ runtime: '18ms', filesPruned: '14 / 16', bytesScanned: '2.1 MB' });
 
-  const handlePromoteSnapshot = () => {
-    setPromoteStatus('promoting');
-    setTimeout(() => {
-      setPromoteStatus('promoted');
-      if (onRollbackGolden) onRollbackGolden();
-      setTimeout(() => setPromoteStatus('idle'), 3500);
-    }, 1200);
+  const queryPresets = {
+    golden: {
+      sql: `SELECT order_id, customer_id, subtotal, tax_amount, total, status\nFROM prod_lakehouse.checkout_transactions\nFOR SYSTEM_VERSION AS OF 4819284718\nWHERE tax_amount IS NULL;`,
+      resultSummary: '0 rows returned (Verified Golden State: ZERO NULLs)',
+      isClean: true,
+      stats: { runtime: '18ms', filesPruned: '14 / 16', bytesScanned: '2.1 MB' },
+      columns: ['order_id', 'customer_id', 'subtotal', 'tax_amount', 'total', 'status'],
+      rows: [],
+    },
+    corrupt: {
+      sql: `SELECT order_id, customer_id, subtotal, tax_amount, total, status\nFROM prod_lakehouse.checkout_transactions\nFOR SYSTEM_VERSION AS OF 4819284719\nWHERE tax_amount IS NULL\nLIMIT 3;`,
+      resultSummary: '14,280 rows returned (QUARANTINED PARTITION CORRUPTION DETECTED)',
+      isClean: false,
+      stats: { runtime: '26ms', filesPruned: '2 / 16', bytesScanned: '18.4 MB' },
+      columns: ['order_id', 'customer_id', 'subtotal', 'tax_amount', 'total', 'status'],
+      rows: [
+        ['ord_98418290', 'usr_8819401', '$142.50', 'NULL', '$142.50', 'QUARANTINED'],
+        ['ord_98418291', 'usr_4401923', '$85.00', 'NULL', '$85.00', 'QUARANTINED'],
+        ['ord_98418292', 'usr_2910488', '$259.40', 'NULL', '$259.40', 'QUARANTINED'],
+      ],
+    },
+    partitions: {
+      sql: `SELECT partition, record_count, file_count, total_data_file_size_in_bytes\nFROM prod_lakehouse.checkout_transactions.partitions;`,
+      resultSummary: '4 partitions returned (1 isolated, 3 healthy)',
+      isClean: true,
+      stats: { runtime: '12ms', filesPruned: '0 / 4 (Metadata Scan)', bytesScanned: '14 KB' },
+      columns: ['partition', 'record_count', 'file_count', 'data_size'],
+      rows: [
+        ['dt=2025-05-18/hr=12', '248,190', '4 files', '820 MB'],
+        ['dt=2025-05-18/hr=13', '261,420', '4 files', '864 MB'],
+        ['dt=2025-05-18/hr=14', '14,280 (DLQ)', '1 file', '42 MB'],
+        ['dt=2025-05-18/hr=15', '255,800', '4 files', '840 MB'],
+      ],
+    },
+    history: {
+      sql: `SELECT snapshot_id, parent_id, is_current_ancestor, made_current_at\nFROM prod_lakehouse.checkout_transactions.history;`,
+      resultSummary: '3 snapshot commits retrieved from Iceberg catalog',
+      isClean: true,
+      stats: { runtime: '8ms', filesPruned: 'Catalog Metastore', bytesScanned: '8 KB' },
+      columns: ['snapshot_id', 'parent_id', 'is_current_ancestor', 'timestamp'],
+      rows: [
+        ['4819284717', '4819284716', 'true', '2025-05-18 14:15:00 UTC'],
+        ['4819284718 (GOLD)', '4819284717', 'true', '2025-05-18 14:30:00 UTC'],
+        ['4819284719 (CORRUPT)', '4819284718', 'false (ISOLATED)', '2025-05-18 14:31:58 UTC'],
+      ],
+    },
   };
 
-  const handleCreateBranch = () => {
-    setBranchStatus('branching');
-    setTimeout(() => {
-      setBranchStatus('created');
-      setTimeout(() => setBranchStatus('idle'), 3500);
-    }, 900);
+  const [queryCode, setQueryCode] = useState<string>(queryPresets.golden.sql);
+  const [isQueryRunning, setIsQueryRunning] = useState(false);
+  const [activePresetData, setActivePresetData] = useState(queryPresets.golden);
+
+  const handleSelectPreset = (key: 'golden' | 'corrupt' | 'partitions' | 'history') => {
+    setSelectedPreset(key);
+    setQueryCode(queryPresets[key].sql);
+    setActivePresetData(queryPresets[key]);
   };
 
   const handleExecuteQuery = () => {
     setIsQueryRunning(true);
     setTimeout(() => {
       setIsQueryRunning(false);
-      if (queryCode.includes('4819284719')) {
-        setQueryResultText('14,280 rows returned (QUARANTINED PARTITION CORRUPTION)');
-      } else {
-        setQueryResultText('0 rows returned (Verified Golden State)');
-      }
-    }, 450);
+      setActivePresetData(queryPresets[selectedPreset]);
+      setQueryExecutionStats(queryPresets[selectedPreset].stats);
+    }, 380);
   };
 
   const handleToggleSyncRate = () => {
@@ -313,33 +348,77 @@ export const IcebergTableScreen: React.FC<IcebergTableScreenProps> = ({
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-sky-600 text-[20px]">terminal</span>
               <span className="text-sm font-bold text-slate-900">
-                Time-Travel Query Simulator &amp; Assertion Check
+                Interactive Iceberg Time-Travel Query Console
               </span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs text-slate-500 font-medium">Engine: Trino / Nessie Catalog</span>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
-                Query SLA: 38ms
+                Execution: {queryExecutionStats.runtime}
               </span>
             </div>
           </div>
 
+          {/* Preset Buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Query Presets:</span>
+            <button
+              type="button"
+              onClick={() => handleSelectPreset('golden')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                selectedPreset === 'golden'
+                  ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+              }`}
+            >
+              Verify Golden Snapshot (#4819284718)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectPreset('corrupt')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                selectedPreset === 'corrupt'
+                  ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+              }`}
+            >
+              Detect Corruption (#4819284719)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectPreset('partitions')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                selectedPreset === 'partitions'
+                  ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+              }`}
+            >
+              Table Partitions (.partitions)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectPreset('history')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                selectedPreset === 'history'
+                  ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+              }`}
+            >
+              Snapshot Commit History (.history)
+            </button>
+          </div>
+
+          {/* SQL Editor */}
           <div className="bg-slate-900 rounded-xl p-4 font-mono text-xs text-slate-200 relative group shadow-inner">
-            <div className="leading-relaxed">
-              <span className="text-sky-400 font-bold">SELECT</span> * <span className="text-sky-400 font-bold">FROM</span>{' '}
-              <span className="text-white">prod_lakehouse.checkout_transactions</span>
-              <br />
-              <span className="text-sky-400 font-bold">FOR SYSTEM_VERSION AS OF</span>{' '}
-              <span className="text-emerald-400 font-bold">4819284718</span>
-              <br />
-              <span className="text-sky-400 font-bold">WHERE</span> tax_amount <span className="text-sky-400 font-bold">IS NULL</span>;
-            </div>
+            <pre className="text-slate-200 leading-relaxed font-mono whitespace-pre-wrap">
+              {queryCode}
+            </pre>
 
             <button
               type="button"
               onClick={handleExecuteQuery}
               disabled={isQueryRunning}
-              className="absolute right-4 top-4 px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              className="absolute right-4 top-4 px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
             >
               {isQueryRunning ? (
                 <>
@@ -349,26 +428,83 @@ export const IcebergTableScreen: React.FC<IcebergTableScreenProps> = ({
               ) : (
                 <>
                   <span className="material-symbols-outlined text-[15px]">play_arrow</span>
-                  Run Query
+                  Execute Query
                 </>
               )}
             </button>
           </div>
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2 border-t border-slate-200">
-            <div className="flex items-center gap-2.5">
-              <div className="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 text-xs font-semibold flex items-center gap-2 border border-emerald-200">
-                <span className="material-symbols-outlined text-[16px] text-emerald-600">task_alt</span>
-                <span>{queryResultText}</span>
+          {/* Query Execution Result & Telemetry Stats */}
+          <div className="space-y-3 pt-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 border ${
+                  activePresetData.isClean
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                }`}>
+                  <span className="material-symbols-outlined text-[16px]">
+                    {activePresetData.isClean ? 'check_circle' : 'error'}
+                  </span>
+                  {activePresetData.resultSummary}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
+                <span>Pruned: <strong className="text-slate-800">{queryExecutionStats.filesPruned}</strong></span>
+                <span>·</span>
+                <span>Scanned: <strong className="text-slate-800">{queryExecutionStats.bytesScanned}</strong></span>
               </div>
             </div>
+
+            {/* Tabular Output */}
+            {activePresetData.rows.length > 0 ? (
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                <table className="w-full text-left border-collapse text-xs font-mono">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px]">
+                      {activePresetData.columns.map((col, idx) => (
+                        <th key={idx} className="p-2.5 font-bold">{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {activePresetData.rows.map((row, rIdx) => (
+                      <tr key={rIdx} className="hover:bg-slate-50/80 transition-colors">
+                        {row.map((val, cIdx) => (
+                          <td key={cIdx} className={`p-2.5 ${
+                            val === 'NULL' || val.includes('CORRUPT')
+                              ? 'text-rose-600 font-bold bg-rose-50/40'
+                              : val.includes('GOLD')
+                              ? 'text-emerald-700 font-bold'
+                              : 'text-slate-700'
+                          }`}>
+                            {val}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center gap-2">
+                <span className="material-symbols-outlined text-emerald-600 text-[18px]">verified</span>
+                <span>Verified: Zero records matched `tax_amount IS NULL` filter. Table integrity 100% compliant.</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-3 border-t border-slate-200">
+            <span className="text-xs text-slate-500">
+              Pointer Controls: Instant catalog update with zero table rewrite
+            </span>
 
             <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 type="button"
                 onClick={handlePromoteSnapshot}
                 disabled={promoteStatus === 'promoting'}
-                className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold transition-all shadow-sm flex items-center gap-2 active:scale-95 disabled:opacity-70"
+                className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold transition-all shadow-sm flex items-center gap-2 active:scale-95 disabled:opacity-70 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[16px]">fast_rewind</span>
                 {promoteStatus === 'promoting'
@@ -382,7 +518,7 @@ export const IcebergTableScreen: React.FC<IcebergTableScreenProps> = ({
                 type="button"
                 onClick={handleCreateBranch}
                 disabled={branchStatus === 'branching'}
-                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold transition-all flex items-center gap-2 border border-slate-200 shadow-sm"
+                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-semibold transition-all flex items-center gap-2 border border-slate-200 shadow-sm cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[16px]">fork_right</span>
                 {branchStatus === 'branching'

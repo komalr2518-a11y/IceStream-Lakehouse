@@ -108,17 +108,67 @@ export const InspectQuarantineModal: React.FC<InspectQuarantineModalProps> = ({
           </div>
         </div>
 
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-          <span className="text-xs text-slate-500 font-mono">
-            Format: Apache Parquet (v2) · Snappy
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 font-semibold text-xs border border-slate-200 shadow-sm"
-          >
-            Close Inspector
-          </button>
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-between items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-mono">
+              Format: Apache Parquet (v2) · Snappy
+            </span>
+            <span className="text-slate-300">|</span>
+            <button
+              type="button"
+              onClick={() => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(samples, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `quarantine_records_${Date.now()}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+              }}
+              className="text-xs text-sky-700 hover:text-sky-900 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[15px]">download</span>
+              Export JSON
+            </button>
+            <span className="text-slate-300">·</span>
+            <button
+              type="button"
+              onClick={() => {
+                const headers = "id,orderId,customerId,eventTime,subtotal,taxAmount,total,status,gateway,jurisdiction\n";
+                const rows = samples.map(s => `"${s.id}","${s.orderId}","${s.customerId}","${s.eventTime}","${s.subtotal}","${s.taxAmount || ''}","${s.total}","${s.status}","${s.gateway}","${s.jurisdiction}"`).join("\n");
+                const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(headers + rows);
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `quarantine_records_${Date.now()}.csv`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+              }}
+              className="text-xs text-sky-700 hover:text-sky-900 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[15px]">table_chart</span>
+              Export CSV
+            </button>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                alert("Initiated Kafka DLQ re-drive job: 18,492 quarantined records queued for reprocessing into 'checkout.v2.repaired'.");
+              }}
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[16px]">replay</span>
+              Re-drive to DLQ
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 font-semibold text-xs border border-slate-200 shadow-sm cursor-pointer"
+            >
+              Close Inspector
+            </button>
+          </div>
         </div>
       </div>
     </div>

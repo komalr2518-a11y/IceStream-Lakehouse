@@ -28,6 +28,72 @@ Compliance Status: SOC2 Type II Clean Assertion`;
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDownloadJson = () => {
+    const postmortemData = {
+      incidentId: "INC-2025-0514-082",
+      severity: "P1 - CRITICAL",
+      status: "AUTONOMOUSLY_MITIGATED",
+      targetTable: "prod_lakehouse.checkout_transactions",
+      autonomousAgent: "IceStream-SelfHeal-v4",
+      leadEngineer: "Sarah Lin (Lead Data Reliability Eng)",
+      rootCause: "AvaTax container timeout leading to 50.42% tax_amount NULL rate in telemetry.orders.checkout.v2.",
+      circuitTripLatencyMs: 189,
+      dataLeakedRows: 0,
+      financialBlastRadiusGuardedUsd: 1420800,
+      quarantinedOrdersCount: 14160,
+      goldenSnapshotLocked: 4819284718,
+      quarantineStorageBucket: "s3://lakehouse-quarantine/orders_bad_tax/",
+      complianceEvidence: [
+        { control: "SOC2-CC7.2", requirement: "Incident detection within automated SLA", status: "PASS", result: "189ms vs 1000ms SLA" },
+        { control: "SOC2-CC7.3", requirement: "Quarantine data segregation in isolated bucket", status: "PASS", result: "s3://lakehouse-quarantine" },
+        { control: "SOC2-CC6.6", requirement: "Dual-approver gate for breaker override enforcement", status: "PASS", result: "Supervisory Lock Engaged" },
+        { control: "SOC2-CC6.8", requirement: "ACID rollback guarantee with Apache Iceberg Spec v2", status: "VERIFIED", result: "Snapshot Pointer Rollback Verified" }
+      ],
+      generatedAt: new Date().toISOString()
+    };
+
+    const blob = new Blob([JSON.stringify(postmortemData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `incident_audit_INC-2025-0514-082.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadCsv = () => {
+    const csvRows = [
+      ["Audit Control", "Requirement", "Status", "Verification Result"],
+      ["SOC2-CC7.2", "Incident detection within automated SLA", "PASS", "189ms vs 1000ms SLA"],
+      ["SOC2-CC7.3", "Quarantine data segregation in isolated bucket", "PASS", "s3://lakehouse-quarantine/orders_bad_tax/"],
+      ["SOC2-CC6.6", "Dual-approver gate for breaker override enforcement", "PASS", "Supervisory Lock Engaged"],
+      ["SOC2-CC6.8", "ACID rollback guarantee with Apache Iceberg Spec v2", "VERIFIED", "Snapshot Pointer #4819284718 Rollback Verified"],
+      [],
+      ["Incident Metric", "Value"],
+      ["Ticket ID", "INC-2025-0514-082"],
+      ["Severity", "P1 - CRITICAL"],
+      ["Trip Latency", "189 ms"],
+      ["Data Leaked", "0 rows (0%)"],
+      ["Financial Drift Guarded", "$1,420,800 USD"],
+      ["Orders Impacted", "14,160"],
+      ["Target Table", "prod_lakehouse.checkout_transactions"],
+      ["Audit Timestamp", new Date().toISOString()]
+    ];
+
+    const csvContent = csvRows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `incident_audit_INC-2025-0514-082.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white border border-slate-200/90 rounded-2xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in duration-150">
@@ -84,24 +150,46 @@ Compliance Status: SOC2 Type II Clean Assertion`;
           </div>
         </div>
 
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold flex items-center gap-2 border border-slate-200 shadow-sm"
-          >
-            <span className="material-symbols-outlined text-[15px]">
-              {copied ? 'check' : 'content_copy'}
-            </span>
-            {copied ? 'Copied to Clipboard' : 'Copy Full Postmortem'}
-          </button>
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-between items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold flex items-center gap-1.5 border border-slate-200 shadow-sm cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[15px]">
+                {copied ? 'check' : 'content_copy'}
+              </span>
+              {copied ? 'Copied' : 'Copy Text'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadJson}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-sky-700 text-xs font-semibold flex items-center gap-1.5 border border-slate-200 shadow-sm cursor-pointer"
+              title="Download Incident Audit Data in JSON format"
+            >
+              <span className="material-symbols-outlined text-[15px]">download</span>
+              Download JSON
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadCsv}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-emerald-700 text-xs font-semibold flex items-center gap-1.5 border border-slate-200 shadow-sm cursor-pointer"
+              title="Download Incident Audit Controls Matrix in CSV format"
+            >
+              <span className="material-symbols-outlined text-[15px]">table_chart</span>
+              Download CSV
+            </button>
+          </div>
 
           <button
             type="button"
             onClick={() => {
               window.print();
             }}
-            className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs transition-all flex items-center gap-2 shadow-sm"
+            className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs transition-all flex items-center gap-2 shadow-sm cursor-pointer"
           >
             <span className="material-symbols-outlined text-[15px]">print</span>
             Print / Save PDF

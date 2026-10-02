@@ -12,6 +12,7 @@ interface HeaderProps {
   onOpenLogin: () => void;
   onLogout: () => void;
   onSwitchUser?: (user: UserProfile) => void;
+  onOpenChaos?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,6 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   onOpenLogin,
   onLogout,
+  onOpenChaos,
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [logoError, setLogoError] = useState(false);
@@ -117,7 +119,18 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Right Section: Alert Button & User Profile / Login */}
-        <div className="flex items-center gap-3.5 min-w-max">
+        <div className="flex items-center gap-3 min-w-max">
+          {/* Chaos Simulator Button */}
+          <button
+            type="button"
+            onClick={onOpenChaos}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-all cursor-pointer font-semibold text-xs shadow-sm active:scale-95"
+            title="Inject real-time anomalies or test auto-healing"
+          >
+            <span className="material-symbols-outlined text-[17px] text-amber-600">pest_control</span>
+            <span className="hidden sm:inline">Simulate Chaos</span>
+          </button>
+
           {/* Circuit-Breaker Triggered Alert */}
           <button
             type="button"

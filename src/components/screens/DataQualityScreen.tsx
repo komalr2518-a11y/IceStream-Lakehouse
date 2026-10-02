@@ -49,6 +49,74 @@ meta:
     }, 1500);
   };
 
+  const handleExportQualityJson = () => {
+    const report = {
+      reportType: "LAKEHOUSE_DATA_QUALITY_AUDIT",
+      pipeline: "checkout.telemetry.v2",
+      environment: "Production S3 Lakehouse",
+      specification: "Great Expectations v0.18.9 / Apache Iceberg Spec v2",
+      auditTimestamp: new Date().toISOString(),
+      complianceSummary: {
+        totalRulesEvaluated: rules.length,
+        passedRules: rules.filter((r) => r.status === 'PASS').length,
+        violatedRules: rules.filter((r) => r.status !== 'PASS').length,
+        overallPassRate: "98.92%",
+        quarantineActionEngaged: true,
+        slaTrippedLatency: "85ms",
+        complianceAuditStatus: "SOC2-CC7.2 PASS"
+      },
+      assertionRules: rules.map((r) => ({
+        ruleId: r.id,
+        ruleName: r.name,
+        targetColumn: r.column,
+        expectationType: r.type,
+        severity: r.severity,
+        threshold: r.threshold,
+        observedFailureRate: r.observedFailureRate || "0.00%",
+        breachedRecords: r.breachedRecordsCount || 0,
+        status: r.status,
+        enforcementAction: r.action || "quarantine_and_isolate"
+      }))
+    };
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `data_quality_audit_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportQualityCsv = () => {
+    const headers = ["Rule ID", "Rule Name", "Target Column", "Expectation Type", "Severity", "Threshold", "Observed Breach Rate", "Breached Records", "Status", "Action"];
+    const rows = rules.map((r) => [
+      r.id,
+      `"${r.name.replace(/"/g, '""')}"`,
+      r.column,
+      r.type,
+      r.severity,
+      r.threshold,
+      r.observedFailureRate || "0.00%",
+      r.breachedRecordsCount || 0,
+      r.status,
+      r.action || "quarantine_and_isolate"
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `data_quality_audit_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-7 pb-12">
       {/* Top Command Deck */}
@@ -90,6 +158,29 @@ meta:
 
           {/* Action Cluster */}
           <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Export Audit Report Buttons */}
+            <div className="flex items-center rounded-xl border border-slate-200 bg-white p-0.5 shadow-sm">
+              <button
+                type="button"
+                onClick={handleExportQualityJson}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-sky-700 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                title="Export complete Great Expectations audit report as JSON"
+              >
+                <span className="material-symbols-outlined text-[15px] text-sky-600">data_object</span>
+                Export JSON
+              </button>
+              <div className="h-3.5 w-px bg-slate-200"></div>
+              <button
+                type="button"
+                onClick={handleExportQualityCsv}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-sky-700 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                title="Export assertions compliance matrix as CSV"
+              >
+                <span className="material-symbols-outlined text-[15px] text-emerald-600">table_chart</span>
+                Export CSV
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={onImportYaml}

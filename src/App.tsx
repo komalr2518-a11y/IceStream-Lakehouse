@@ -16,6 +16,7 @@ import { CreateExpectationModal } from './components/modals/CreateExpectationMod
 import { PostmortemModal } from './components/modals/PostmortemModal';
 import { DocsAndApiModal } from './components/modals/DocsAndApiModal';
 import { ClusterConfigModal } from './components/modals/ClusterConfigModal';
+import { ChaosSimulatorModal } from './components/modals/ChaosSimulatorModal';
 import { LoginModal, PRESET_USERS } from './components/auth/LoginModal';
 
 export default function App() {
@@ -35,6 +36,8 @@ export default function App() {
   const [isPostmortemModalOpen, setIsPostmortemModalOpen] = useState(false);
   const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isChaosModalOpen, setIsChaosModalOpen] = useState(false);
+  const [isBreakerTripped, setIsBreakerTripped] = useState(true);
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -103,6 +106,7 @@ export default function App() {
         currentUser={currentUser}
         onOpenLogin={() => setIsLoginModalOpen(true)}
         onLogout={handleLogout}
+        onOpenChaos={() => setIsChaosModalOpen(true)}
       />
 
       {/* Sidebar Navigation */}
@@ -194,6 +198,26 @@ export default function App() {
       <ClusterConfigModal
         isOpen={isConfigModalOpen}
         onClose={() => setIsConfigModalOpen(false)}
+      />
+
+      <ChaosSimulatorModal
+        isOpen={isChaosModalOpen}
+        onClose={() => setIsChaosModalOpen(false)}
+        isBreakerTripped={isBreakerTripped}
+        onTriggerScenario={(scenario) => {
+          setIsBreakerTripped(true);
+          if (scenario === 'tax_timeout') {
+            showToast('🚨 AvaTax 504 Timeout Injected: Breaker TRIPPED (85ms). Bad records diverted to S3.');
+          } else if (scenario === 'price_outlier') {
+            showToast('⚠️ Currency Anomaly Injected: Assertion rule "expect_column_values_to_be_between" breached.');
+          } else {
+            showToast('⚡ Kafka Consumer Lag Injected: Partition 03 buffer backlog detected, p99 latency 482ms.');
+          }
+        }}
+        onAutoHeal={() => {
+          setIsBreakerTripped(false);
+          showToast('✅ Autonomous Self-Healing Protocol Complete: 18,492 records reconciled, Breaker ARMED / NORMAL.');
+        }}
       />
     </div>
   );
